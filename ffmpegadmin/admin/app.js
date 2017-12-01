@@ -20,9 +20,9 @@ var fs = require('fs')
   , log = new Log('debug', fs.createWriteStream('my.log'));
 
 var _SH_PATH_ = '/home/willfonk/service/ffmpegadmin/admin';
-//ffmpegConfig
-var channel_file = _SH_PATH_+'/ffmpegConfig.json';
-var active_file = _SH_PATH_+'/activeChannel.json';
+//channel_list
+var channel_file = _SH_PATH_+'/channel_list.json';
+//var active_file = _SH_PATH_+'/activeChannel.json';
 var json_fs = require('fs');
 
 //app.use('/ajax',ajax);
@@ -34,31 +34,23 @@ app.use(express.static(__dirname + '/views'));
 
 // channel
 var channel_list = new Array();
-var active_list = new Array();
+//var active_list = new Array();
 
 // 서버 재기동시 자동으로 채널을 재시작
 startFFmpegChannel();
 // 서버 재기동시 자동으로 채널을 재시작
 function startFFmpegChannel(){
   console.log("startFFmpegChannel start !!!");
+
   json_fs.readFile(channel_file, 'utf8', function(err, data){
     var json_info = JSON.parse(data);
     var channel = json_info.channel_list;
-    //channel info
-    for(var j = 0; j < channel.length; j++){
-      channel_list.push(channel[j]);
-    }
-  });
+    console.log("channel:" + channel);
 
-  json_fs.readFile(active_file, 'utf8', function(err, data){
-    var json_info = JSON.parse(data);
-    var active = json_info.active_list;
-    console.log("Active:" + active);
-    //active channel list
-    for(var i = 0; i < active.length; i++){
-      active_list.push(active[i]);
+    for(var i = 0; i < channel.length; i++){
+      channel_list.push(channel[i]);
       //check channel
-      var channel_id = active[i];
+      var channel_id = channel[i];
       console.log("channel_id:" + channel_id );
       cmd.get(_SH_PATH_+"/checker.sh " + channel_id ,
         function (err, data, stderr){
@@ -107,16 +99,24 @@ app.get('/API/test', function(req, res, next) {
 
 // node cmd
 app.get('/API/getFFmpegProcess', function(req, res, next){
-  console.log('======getFFmpegProcess=====');
+  console.log('====== getFFmpegProcess =====');
   cmd.get( "ps -ef | grep ffmpeg | grep -v ffmpegadmin | grep -v 'grep'" , function(err, data,stderr){
     console.log(data);
     res.send(data);
   });
 });
 
+app.get('/API/getChannelList', function(req, res, next) {
+    console.log('====== getChannelList ========== ');
+    var rlt = "{ channel_list : "+ JSON.stringify(channel_list) + " }";
+    //var str_list = "{ channel_list : " + JSON.stringify(channel_list) + "}";
+    //var rlt = JSON.stringify(str_list);
+    res.send(rlt);
+});
+
 // async
 app.get('/API/getServerStatus', function(req, res, next){
-  console.log('======getServerStatus=====');
+  console.log('====== getServerStatus =====');
   var serverInfo = {"cpu": null , "memory":null , "network": null};
   async.waterfall([
     function(callback){
@@ -158,7 +158,7 @@ app.get('/API/getServerStatus', function(req, res, next){
 
 // node cmd / setChannelRestart
 app.get('/API/setChannelRestart', function(req, res, next){
-  console.log('======setChannelRestart=====');
+  console.log('====== setChannelRestart =====');
   var channel_id = req.query.channel_id;
 
   if((channel_id == 'undefined') || (channel_id == null)) {
@@ -168,20 +168,24 @@ app.get('/API/setChannelRestart', function(req, res, next){
   }
   console.log(channel_id);
 
-  // invalid check~
-  var check = "false";
-  for(var i = 0; i < channel_list.length; i++){
-    if(channel_id == channel_list[i]){
-      check = "true";
-      break;
-    }
-  }
+  // // invalid check~
+  // 전체 채널의 대한 기본적인 체크를 한다
 
-  if(check == "false"){
-    console.log("[error][setChannelRestart] channel_id : " + channel_id + "is Invalid !!!");
-    res.send({"result":"error 2"});
-    return;
-  }
+  // allChannel_list.json 만들어서 영구적으로 쓴다. (이름 체크용)
+  // var check = "false";
+  // for(var i = 0; i < channel_list.length; i++){
+  //   if(channel_id == channel_list[i]){
+  //     check = "true";
+  //     break;
+  //   }
+  // }
+  // if(check == "false"){
+  //   console.log("[error][setChannelRestart] channel_id : " + channel_id + "is Invalid !!!");
+  //   res.send({"result":"error 2"});
+  //   return;
+  // }
+
+  
   cmd.get(_SH_PATH_+"/shutdown.sh "+channel_id , function(err, data, stderr){
     console.log(channel_id);
       cmd.get(_SH_PATH_+"/run.sh "+ channel_id ,  function(err, data, stderr){
@@ -195,7 +199,7 @@ app.get('/API/setChannelRestart', function(req, res, next){
 });
 
 app.get('/API/setChannelTerminate', function(req, res, next){
-  console.log('======setChannelTerminate=====');
+  console.log('====== setChannelTerminate =====');
   var channel_id = req.query.channel_id;
   if((channel_id == 'undefined') || (channel_id == null)) {
       console.log("[error][setChannelTerminate] channel_id : " + channel_id + "is Invalid !!!");
@@ -221,9 +225,9 @@ var activeChannelToJSON = function(cmd, channel_id, callback){
 
   if(cmd == "remove"){
     console.log("remove to active channel!");
-    var index = active_list.indexOf(channel_id);
+    var index = channel_list.indexOf(channel_id);
     if(index > -1 ){
-      active_list.splice(index, 1);
+      channel_list.splice(index, 1);
       flag = true;
     }
   }else if(cmd == "add"){
@@ -231,7 +235,7 @@ var activeChannelToJSON = function(cmd, channel_id, callback){
   //  var check = channel_list.indexOf(channel_id);
     // channel_list  에 있는지 체크 없으면 허용 채널이 아니다.
     //if(check > -1 ){
-      active_list.push(channel_id);
+      channel_list.push(channel_id);
       flag = true;
     //}
   }
@@ -239,11 +243,11 @@ var activeChannelToJSON = function(cmd, channel_id, callback){
   if(flag == true){
     //var obj = {channel_list:[], active_list:[]};
     //obj.channel_list = channel_list;
-    var obj = {active_list:[]};
-    obj.active_list = active_list;
+    var obj = {channel_list:[]};
+    obj.channel_list = channel_list;
 
     var json_list = JSON.stringify(obj);
-    fs.writeFile(_SH_PATH_+"/activeChannel.json", json_list, 'utf8', function(err, data, stderr){
+    fs.writeFile(_SH_PATH_+"/channel_list.json", json_list, 'utf8', function(err, data, stderr){
         console.log("json write ok");
         callback("ok");
     });
