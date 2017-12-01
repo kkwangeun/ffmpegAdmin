@@ -1,0 +1,53 @@
+<html>
+  <head>
+    <link rel='stylesheet' href='/stylesheets/style.css' />
+    <script src='http://code.jquery.com/jquery-latest.js'></script>
+  </head>
+  <body>
+    <input type="text" id="msgbox" />
+    <input type="button" id="ajax_test" value="ajax_test" />
+    <div id="result"></div>
+    <script>
+
+      $(document).ready(function() {
+      	//loadData();
+      });
+
+      $('#ajax_test').click( function() {
+          $('#result').html('');
+
+          $.ajax({
+              url: 'http://173.82.169.178:3000/API/getServerStatus',
+              dataType: 'json',
+              type: 'POST',
+              data: {message:$('#msgbox').val()},
+              success: function(result) {
+
+                console.log(result);
+                //  if ( result['result'] == true ) {
+                //     console.console.log();
+                //     $('#result').html(result['msg']);
+                //  }
+              }
+          });
+      })
+      //
+      // function loadData(){
+      //   console.log("loadData");
+      //
+      //   var cmd = new ActiveXObject("Shell.Application");
+      //
+      //   //var exec = require('child_process').exec;
+      //
+      //   // exec("ls", function (err, stdout, stderr) {
+      //   //     console.log('stdout: ' + stdout);
+      //   //     console.log('stderr: ' + stderr);
+      //   //     if (error !== null) {
+      //   //         console.log('error: ' + err);
+      //   //     }
+      //   // });
+      //
+      // }
+    </script>
+  </body>
+</html>
