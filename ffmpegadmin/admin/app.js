@@ -22,7 +22,7 @@ var fs = require('fs')
 var _SH_PATH_ = '/home/willfonk/service/ffmpegadmin/admin';
 //channel_list
 var channel_file = _SH_PATH_+'/channel_list.json';
-//var active_file = _SH_PATH_+'/activeChannel.json';
+var AllChannel_file = _SH_PATH_+'/AllChannel_list.json';
 var json_fs = require('fs');
 
 //app.use('/ajax',ajax);
@@ -34,7 +34,7 @@ app.use(express.static(__dirname + '/views'));
 
 // channel
 var channel_list = new Array();
-//var active_list = new Array();
+var AllChannel_list = new Array();
 
 // 서버 재기동시 자동으로 채널을 재시작
 startFFmpegChannel();
@@ -42,6 +42,18 @@ startFFmpegChannel();
 function startFFmpegChannel(){
   console.log("startFFmpegChannel start !!!");
 
+  //AllChannel_list
+  json_fs.readFile(AllChannel_file, 'utf8', function(err, data){
+    var json_info = JSON.parse(data);
+    var allChannel = json_info.AllChannel_list;
+    console.log("AllChannel:" + allChannel);
+
+    for(var i = 0; i < allChannel.length; i++){
+      AllChannel_list.push(allChannel[i]);
+    }
+  });
+
+  //channel_list
   json_fs.readFile(channel_file, 'utf8', function(err, data){
     var json_info = JSON.parse(data);
     var channel = json_info.channel_list;
@@ -68,6 +80,26 @@ function startFFmpegChannel(){
   });
 };
 
+var channelCheck = function(callback){
+  for(var i = 0; i < channel_list.length; i++){
+    var channel_id = channel_list[i];
+    console.log("channel_id:" + channel_id );
+    cmd.get(_SH_PATH_+"/checker.sh " + channel_id ,
+      function (err, data, stderr){
+        if(data > 0){
+            console.log("data===>" + data);
+        }
+        else {
+          console.log("start channel ==> " + data);
+          cmd.get(_SH_PATH_+"/run.sh " + data, function (err, data, stderr){
+            console.log(data);
+          });
+        }
+    });
+  }//end for
+  callback();
+}
+
 app.all('/*', function(req, res, next) {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Headers", "X-Requested-With");
@@ -93,11 +125,30 @@ app.get('/API/test', function(req, res, next) {
       if (err !== null) {
           console.log('error: ' + err);
       }
-      res.send({cpu:100, memory: "1024/6400", network:150});
+
+      var rlt = '{"cpu":100, "memory": "1024/6400", "network":150}';
+      res.send(JSON.parse(rlt));
     });
 });
 
-// node cmd
+// Checking to rtmp Source
+app.get('/API/getSourceInfo', function(req, res, next){
+  console.log('====== getSourceInfo =====');
+  var channel_id = req.query.channel_id;
+
+  cmd.get( "/usr/bin/timeout 3s ffprobe -v quiet -print_format json -show_streams rtmp://localhost/klive/"+channel_id , function(err, data, stderr){
+    console.log(data);
+    if(data == null || data == ""){
+      data ='{"result":"error"}';
+      res.send(JSON.parse(data));
+    }else{
+        res.send(data);
+    }
+  });
+});
+
+
+// return string
 app.get('/API/getFFmpegProcess', function(req, res, next){
   console.log('====== getFFmpegProcess =====');
   cmd.get( "ps -ef | grep ffmpeg | grep -v ffmpegadmin | grep -v 'grep'" , function(err, data,stderr){
@@ -108,10 +159,8 @@ app.get('/API/getFFmpegProcess', function(req, res, next){
 
 app.get('/API/getChannelList', function(req, res, next) {
     console.log('====== getChannelList ========== ');
-    var rlt = "{ channel_list : "+ JSON.stringify(channel_list) + " }";
-    //var str_list = "{ channel_list : " + JSON.stringify(channel_list) + "}";
-    //var rlt = JSON.stringify(str_list);
-    res.send(rlt);
+    var rlt = '{"channel_list":'+ JSON.stringify(channel_list) + '}';
+    res.send(JSON.parse(rlt));
 });
 
 // async
@@ -157,6 +206,14 @@ app.get('/API/getServerStatus', function(req, res, next){
 });
 
 // node cmd / setChannelRestart
+app.get('/API/cmdChannelCheck', function(req, res, next){
+  console.log('====== cmdChannelCheck =====');
+  channelCheck(function(){
+    res.send("ok");
+  });
+});
+
+// node cmd / setChannelRestart
 app.get('/API/setChannelRestart', function(req, res, next){
   console.log('====== setChannelRestart =====');
   var channel_id = req.query.channel_id;
@@ -170,26 +227,24 @@ app.get('/API/setChannelRestart', function(req, res, next){
 
   // // invalid check~
   // 전체 채널의 대한 기본적인 체크를 한다
+  var check = "false";
+  for(var i = 0; i < AllChannel_list.length; i++){
+    if(channel_id == AllChannel_list[i]){
+      check = "true";
+      break;
+    }
+  }
 
-  // allChannel_list.json 만들어서 영구적으로 쓴다. (이름 체크용)
-  // var check = "false";
-  // for(var i = 0; i < channel_list.length; i++){
-  //   if(channel_id == channel_list[i]){
-  //     check = "true";
-  //     break;
-  //   }
-  // }
-  // if(check == "false"){
-  //   console.log("[error][setChannelRestart] channel_id : " + channel_id + "is Invalid !!!");
-  //   res.send({"result":"error 2"});
-  //   return;
-  // }
-
-  
+  if(check == "false"){
+    console.log("[error][setChannelRestart] channel_id : " + channel_id + "is Invalid !!!");
+    res.send({"result":"error 2"});
+    return;
+  }
   cmd.get(_SH_PATH_+"/shutdown.sh "+channel_id , function(err, data, stderr){
     console.log(channel_id);
       cmd.get(_SH_PATH_+"/run.sh "+ channel_id ,  function(err, data, stderr){
         console.log("run:" + channel_id);
+        //writefile
           activeChannelToJSON("add", channel_id, function(){
               console.log("write callback");
               res.send({"result":"ok"});
@@ -232,14 +287,16 @@ var activeChannelToJSON = function(cmd, channel_id, callback){
     }
   }else if(cmd == "add"){
     console.log("add to active channel!");
-  //  var check = channel_list.indexOf(channel_id);
-    // channel_list  에 있는지 체크 없으면 허용 채널이 아니다.
-    //if(check > -1 ){
+    //만약 이미 있는 채널은 패스
+    var check = channel_list.indexOf(channel_id);
+    if(check != -1 ){  // 존재
+      flag = false;
+    }else {
       channel_list.push(channel_id);
       flag = true;
-    //}
+    }
   }
-
+  console.log("Check ==========> " + flag)
   if(flag == true){
     //var obj = {channel_list:[], active_list:[]};
     //obj.channel_list = channel_list;
@@ -252,6 +309,10 @@ var activeChannelToJSON = function(cmd, channel_id, callback){
         callback("ok");
     });
   }
+  else {
+      callback("error");
+  }
+
 }
 
 app.listen(3000, function(){
