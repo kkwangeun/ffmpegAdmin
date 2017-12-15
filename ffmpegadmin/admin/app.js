@@ -14,6 +14,11 @@ var cpu = osu.cpu;
 var mem = osu.mem;
 var netstat = osu.netstat;
 
+//ffprobe
+var ffprobe = require('ffprobe');
+
+var ffprobeStatic = require('ffprobe-static');
+
 //log
 var fs = require('fs')
   , Log = require('log')
@@ -125,35 +130,58 @@ app.get('/API/test', function(req, res, next) {
       if (err !== null) {
           console.log('error: ' + err);
       }
-
       var rlt = '{"cpu":100, "memory": "1024/6400", "network":150}';
       res.send(JSON.parse(rlt));
     });
 });
-
 // Checking to rtmp Source
+// app.get('/API/getSourceInfo', function(req, res, next){
+//   console.log('====== getSourceInfo =====');
+//   var channel_id = req.query.channel_id;
+//
+//   //time out 3s
+//     cmd.get( "/usr/bin/timeout 3s ffprobe -v quiet -print_format json -show_streams rtmp://localhost/klive/"+channel_id , function(err, data, stderr){
+//       console.log(data);
+//       if(data == null || data == ""){
+//           data ='{"result":false}';
+//           var obj = JSON.parse(data);
+//           obj.channel_id = channel_id;
+//           res.send(obj);
+//       }else{
+//           var obj = JSON.parse(data);
+//           obj.result = true;
+//           obj.channel_id = channel_id;
+//           res.send(obj);
+//       }
+//     });
+// });
+
+
 app.get('/API/getSourceInfo', function(req, res, next){
   console.log('====== getSourceInfo =====');
   var channel_id = req.query.channel_id;
-
-  cmd.get( "/usr/bin/timeout 3s ffprobe -v quiet -print_format json -show_streams rtmp://localhost/klive/"+channel_id , function(err, data, stderr){
-    console.log(data);
-    if(data == null || data == ""){
-      data ='{"result":"error"}';
-      res.send(JSON.parse(data));
-    }else{
-        res.send(data);
-    }
+  ffprobe('rtmp://localhost/klive/'+channel_id, { path: ffprobeStatic.path })
+    .then(function (info) {
+      console.log(info);
+      info.result = true;
+      info.channel_id = channel_id;
+      res.send(info);
+    })
+    .catch(function (err) {
+    //  console.error(err);
+      var data ='{"result":false}';
+      var obj = JSON.parse(data);
+      obj.channel_id = channel_id;
+      res.send(obj);
+    })
   });
-});
-
 
 // return string
 app.get('/API/getFFmpegProcess', function(req, res, next){
   console.log('====== getFFmpegProcess =====');
   cmd.get( "ps -ef | grep ffmpeg | grep -v ffmpegadmin | grep -v 'grep'" , function(err, data,stderr){
     console.log(data);
-    res.send(data);
+    res.send(data);  //return type: String
   });
 });
 
@@ -312,9 +340,7 @@ var activeChannelToJSON = function(cmd, channel_id, callback){
   else {
       callback("error");
   }
-
 }
-
 app.listen(3000, function(){
   //startFFmpegChannel();
 	console.log('Conneted 3000 port!!');
