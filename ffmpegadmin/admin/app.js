@@ -14,9 +14,11 @@ var cpu = osu.cpu;
 var mem = osu.mem;
 var netstat = osu.netstat;
 
+//node-schedule
+var schedule = require('node-schedule');
+
 //ffprobe
 var ffprobe = require('ffprobe');
-
 var ffprobeStatic = require('ffprobe-static');
 
 //log
@@ -115,6 +117,20 @@ app.all('/*', function(req, res, next) {
 app.get('/', function(req, res){
     res.send('hello world');
 });
+
+var j = schedule.scheduleJob('* * * * *', function(){
+    console.log('====== scheduleJob ========== ');
+    //channelCheck(....)  <<-여기서 호출하면 callback 리턴이 안온다.?? 이유는 모르겠다.
+    channelCheckCall();
+});
+
+// schedule 함수에서 바로 callback 함수를 호출하면 동작하지 않는다.
+var channelCheckCall = function(){
+  console.log("======= channelCheckCall =========");
+  channelCheck(function(){
+    console.log('channel_check ok');
+  });
+}
 
 app.get('/API/test', function(req, res, next) {
     console.log('====== getServerStatus ========== ');
